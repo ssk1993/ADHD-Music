@@ -1,0 +1,1525 @@
+---
+title: "paper"
+author: "Sugandh K"
+date: "2024-10-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#loading the libraries 
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(GGally)
+library(RColorBrewer)  # For color palette
+library(viridis)
+library(dplyr)
+library(stringr)
+library(dplyr)
+library(tidytext)
+library(wordcloud2)
+library(stringr)
+library(webshot)
+library(htmlwidgets)
+library(gridExtra)
+```
+
+
+```{r}
+dfsongs <- read.csv("songdata.csv")
+colnames(dfsongs)
+```
+
+```{r}
+dflyrics <- read.csv("lyricsdata.csv")
+colnames(dflyrics)
+```
+
+```{r}
+# Filter out rows where spotify_title is the specific error string
+
+
+# Filter out rows with the error messages or "Not found"
+dfsongs <- dfsongs %>%
+  filter(spotify_title != "Error: 'NoneType' object is not subscriptable" &
+         spotify_title != "Error: expected string or bytes-like object" &
+         spotify_title != "Not found")
+```
+
+
+```{r}
+# Convert specified columns to numeric
+dfsongs <- dfsongs %>%
+  mutate_at(vars(popularity, duration_ms, danceability, energy, key, loudness, mode, 
+                 speechiness, acousticness, instrumentalness, liveness, valence, 
+                 tempo, time_signature), as.numeric)
+```
+
+```{r}
+#creating column for duration in minutes
+dfsongs$duration_minutes <- dfsongs$duration_ms / (1000 * 60)
+```
+
+
+
+```{r}
+dfcats <- read.csv("cats.csv")
+colnames(dfcats)
+dfsongs <- merge(dfcats, dfsongs, by = "id_post", all = FALSE)
+```
+```{r}
+value_counts <- table(dfcats$pred_label)
+print(value_counts)
+```
+```{r}
+library(dplyr)
+
+dfcats <- dfcats %>%
+  mutate(pred_label = ifelse(pred_label == "Other", "General Purpose", pred_label))
+
+```
+
+
+```{r}
+# Assuming your dataframe is named dfsongs and has columns 'title' and 'pred_label'
+dfsongs %>%
+  group_by(pred_label) %>%
+  slice_sample(n = 5) %>%   # Sample 5 titles for each pred_label
+  select(pred_label, title.x) %>%  # Select only the columns pred_label and title
+  arrange(pred_label)  # Arrange by pred_label for better readability
+
+```
+
+
+```{r}
+
+```
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
+
+```{r}
+# Keep rows where lyrics is not "Lyrics not found"
+dflyrics <- dflyrics[dflyrics$lyrics != "Lyrics not found", ] 
+
+dflyrics <- dflyrics %>%
+  filter(lyrics != "Error retrieving lyrics")
+
+# This will keep rows where songname1 is not equal to artistname1
+dflyrics <- dflyrics %>%
+  filter(songname1 != artistname1)
+
+# Remove unwanted phrases like "1 Contributor", "11 Contributors", etc.
+dflyrics <- dflyrics %>%
+  mutate(lyrics = str_remove(lyrics, ".*\\d+\\s*Contributor[s]?\\s*"))
+
+# Remove the word 'Lyrics' and any text before it, as well as extra content like '[Verse 1]'
+dflyrics <- dflyrics %>%
+  mutate(lyrics = str_remove(lyrics, ".*Lyrics\\s*"))
+
+# Remove any text inside square brackets at the beginning of the string
+dflyrics <- dflyrics %>%
+  mutate(lyrics = str_remove(lyrics, "^\\[.*?\\]\\s*"))
+
+# Remove any text inside square brackets anywhere in the lyrics
+dflyrics <- dflyrics %>%
+  mutate(lyrics = str_remove_all(lyrics, "\\[.*?\\]"))
+
+
+# Remove the pattern 'numberEmbed' or just 'Embed' at the end of the lyrics
+dflyrics <- dflyrics %>%
+  mutate(lyrics = str_remove(lyrics, "\\d*Embed$"))
+
+# Remove phrases matching the pattern for concert promotions
+dflyrics <- dflyrics %>%
+  mutate(lyrics = str_remove(lyrics, "See .*? LiveGet tickets as low as \\$\\d+You might also like")) %>%
+  mutate(lyrics = str_remove(lyrics, "You might also like")) # Remove "You might also like" phrase
+
+
+
+# Remove extra spaces from the lyrics column
+dflyrics <- dflyrics %>%
+  mutate(lyrics = str_squish(lyrics))
+
+#remove the duplicates , we want to keep unique ones 
+dflyrics <- dflyrics[!duplicated(dflyrics[c("songname1", "artistname1")]), ]
+```
+
+```{r}
+# Remove rows with blank spaces, NA, or word count less than 10
+dflyrics <- dflyrics %>%
+  mutate(word_count = str_count(lyrics, "\\S+")) %>%  # Calculate word count
+  filter(!is.na(lyrics) &                 # Exclude NA
+         lyrics != "" &                    # Exclude blank strings
+         str_trim(lyrics) != "" &          # Exclude blank spaces
+         word_count >= 10)
+```
+
+
+```{r}
+library(tidytext)
+library(quanteda)
+library(sentimentr)
+library(wordcloud)
+library(dplyr)
+library(stringr)
+
+# Assuming your dataframe is called 'dfsongs' and has a column 'lyrics'
+
+
+
+# 2. Unique Word Count
+dflyrics$unique_word_count <- sapply(strsplit(dflyrics$lyrics, "\\s+"), function(x) length(unique(x)))
+
+# 3. Lexical Diversity (Type-Token Ratio)
+dflyrics$lexical_diversity <- dflyrics$unique_word_count / dflyrics$word_count
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 7. Repetitiveness (ratio of unique words to total words)
+dflyrics$repetitiveness <- 1 - dflyrics$lexical_diversity
+```
+
+
+```{r}
+# Convert the lyrics column to lowercase
+dflyrics <- dflyrics %>%
+  mutate(lyrics = str_to_lower(lyrics))
+```
+
+```{r}
+finaldf <- merge(dfsongs, dflyrics[, c("id_comments", "lyrics","word_count",                                "unique_word_count","lexical_diversity","repetitiveness" )], by = "id_comments", all.x = TRUE)
+```
+
+```{r}
+# Drop rows where 'lyrics' is NA or an empty string
+finaldf <- finaldf %>%
+  filter(!is.na(lyrics) & lyrics != "")
+```
+
+```{r}
+# Install and load required packages
+
+library(tidytext)
+library(dplyr)
+library(syuzhet)
+
+# Assuming finaldf is your dataframe and it has a column named 'lyrics'
+# If finaldf doesn't exist in your environment, you'll need to load it first
+
+# Function to calculate sentiment for a single set of lyrics
+calculate_sentiment <- function(lyrics) {
+  # Tokenize the lyrics
+  tokens <- data_frame(text = lyrics) %>%
+    unnest_tokens(word, text)
+  
+  # Get sentiment scores
+  lyrics_sentiments <- get_sentiment(tokens$word, method = "bing")
+  
+  # Calculate overall sentiment
+  overall_sentiment <- sum(lyrics_sentiments)
+  
+  return(overall_sentiment)
+}
+
+# Apply sentiment analysis to each row in the lyrics column
+finaldf$lyrics_sentiment <- sapply(finaldf$lyrics, calculate_sentiment)
+
+finaldf$comment_sentiment <- sapply(finaldf$body, calculate_sentiment)
+
+# View the results
+head(finaldf[c("lyrics", "lyrics_sentiment")])
+
+# Optional: Categorize sentiment
+finaldf$sentiment_category <- case_when(
+  finaldf$lyrics_sentiment > 0 ~ "Positive",
+  finaldf$lyrics_sentiment < 0 ~ "Negative",
+  TRUE ~ "Neutral"
+)
+
+# Summary of sentiment scores
+summary(finaldf$lyrics_sentiment)
+
+# Count of sentiment categories
+table(finaldf$sentiment_category)
+```
+
+
+
+```{r}
+# Calculate min and max of the lyrics_sentiment column
+min_score <- min(finaldf$lyrics_sentiment)
+max_score <- max(finaldf$lyrics_sentiment)
+
+# Normalize the lyrics_sentiment to the range -1 to 1
+finaldf$lyrics_sentiment <- 2 * (finaldf$lyrics_sentiment - min_score) / (max_score - min_score) - 1
+```
+
+
+```{r}
+# Calculate min and max of the lyrics_sentiment column
+min_score <- min(finaldf$comment_sentiment)
+max_score <- max(finaldf$comment_sentiment)
+
+# Normalize the lyrics_sentiment to the range -1 to 1
+finaldf$comment_sentiment <- 2 * (finaldf$comment_sentiment - min_score) / (max_score - min_score) - 1
+```
+
+```{r}
+value_counts <- table(finaldf$pred_label)
+print(value_counts)
+
+```
+
+
+```{r}
+dfsongs <- dfsongs %>%
+  mutate(pred_label = ifelse(pred_label == "Other", "General Purpose", pred_label))
+
+finaldf <- finaldf %>%
+  mutate(pred_label = ifelse(pred_label == "Other", "General Purpose", pred_label))
+
+```
+
+```{r}
+# Load required libraries
+library(ggstatsplot)
+library(purrr)
+library(patchwork)
+library(ggplot2)
+library(viridis)  # For a nice color palette
+library(dplyr)    # For filtering
+
+# List of audio features to analyze (excluding 'liveness' and 'speechiness')
+audio_features <- c("energy", "acousticness", "danceability", "valence", "loudness", 
+                    "instrumentalness", "tempo")
+
+# Add 'lexical_diversity' and 'lyrics_sentiment' from finaldf
+extra_features <- c("lexical_diversity", "lyrics_sentiment")
+
+# Custom theme for a more aesthetic look
+custom_theme <- theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    legend.position = "none",
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+# Function to create plot for each feature
+create_plot <- function(feature, df) {
+  ggbetweenstats(
+    data = df,
+    x = pred_label,  # Use pred_label instead of topic_name
+    y = !!sym(feature),
+    type = "parametric",
+    var.equal = TRUE,
+    plot.type = "violin",
+    pairwise.comparisons = TRUE,
+    pairwise.display = "significant",
+    
+    centrality.plotting = TRUE,
+    results.subtitle = FALSE,  # Remove Fisher's F, p-value, CI, etc.
+    bf.message = FALSE,
+    title = paste(toupper(feature)),
+    xlab = "category",
+    ylab = feature,
+    ggtheme = custom_theme,
+    ggplot.component = list(
+      scale_fill_viridis(discrete = TRUE, option = "D"),
+      scale_color_viridis(discrete = TRUE, option = "D")
+    ),
+    package = "ggsci",
+    palette = "default_jco"
+  ) +
+    theme(
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      axis.title.y.right = element_blank(),
+      axis.text.y.right = element_blank(),
+      axis.ticks.y.right = element_blank()
+    )  # Keep x-axis labels horizontal
+}
+
+# Create plots for audio features in dfsongs
+plots_audio <- map(audio_features, ~ create_plot(.x, dfsongs))
+
+# Create plots for extra features in finaldf
+plots_extra <- map(extra_features, ~ create_plot(.x, finaldf))
+
+# Combine both sets of plots
+all_plots <- c(plots_audio, plots_extra)
+
+# Combine plots into a grid (adjusting rows and columns as needed)
+grid_plot <- wrap_plots(all_plots, ncol = 3, nrow = 3) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    title = "",
+    theme = theme(
+      plot.title = element_text(size = 20, face = "bold", hjust = 0.5, margin = margin(b = 20)),
+      plot.background = element_rect(fill = "white", color = NA)
+    )
+  ) &
+  theme(plot.margin = margin(10, 10, 10, 10))
+
+# Save the plot
+ggsave(
+  filename = "audio_features_and_extras_comparison_grid.png",
+  plot = grid_plot,
+  width = 24,
+  height = 20,
+  units = "in",
+  dpi = 300
+)
+
+# Display the plot (optional)
+#print(grid_plot)
+
+
+```
+
+```{r}
+# Load required libraries
+library(ggstatsplot)
+library(purrr)
+library(patchwork)
+library(ggplot2)
+library(viridis)  # For a nice color palette
+library(dplyr)    # For filtering
+
+# List of audio features to analyze (excluding 'liveness' and 'speechiness')
+audio_features <- c("energy", "acousticness", "danceability", "valence", "loudness", 
+                    "instrumentalness", "tempo")
+
+# Add 'lexical_diversity' and 'lyrics_sentiment' from finaldf
+extra_features <- c("lexical_diversity", "lyrics_sentiment")
+
+# Custom theme for a more aesthetic look
+custom_theme <- theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    legend.position = "none",
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+# Function to create plot for each feature using Kruskal-Wallis test and Dunn's post-hoc test with Holm's correction
+create_plot <- function(feature, df) {
+  ggbetweenstats(
+    data = df,
+    x = pred_label,  # Use pred_label instead of topic_name
+    y = !!sym(feature),
+    type = "nonparametric",  # Use Kruskal-Wallis test
+    plot.type = "violin",
+    pairwise.comparisons = TRUE,  # Enable pairwise post-hoc comparisons
+    pairwise.display = "significant",
+    p.adjust.method = "holm",  # Use Holm’s correction for multiple comparisons
+    
+    centrality.plotting = TRUE,
+    results.subtitle = TRUE,  # Remove Fisher's F, p-value, CI, etc.
+    bf.message = FALSE,
+    title = paste(toupper(feature)),
+    xlab = "category",
+    ylab = feature,
+    ggtheme = custom_theme,
+    ggplot.component = list(
+      scale_fill_viridis(discrete = TRUE, option = "D"),
+      scale_color_viridis(discrete = TRUE, option = "D")
+    ),
+    package = "ggsci",
+    palette = "default_jco"
+  ) +
+    theme(
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      axis.title.y.right = element_blank(),
+      axis.text.y.right = element_blank(),
+      axis.ticks.y.right = element_blank()
+    )  # Keep x-axis labels horizontal
+}
+
+# Create plots for audio features in dfsongs
+plots_audio <- map(audio_features, ~ create_plot(.x, dfsongs))
+
+# Create plots for extra features in finaldf
+plots_extra <- map(extra_features, ~ create_plot(.x, finaldf))
+
+# Combine both sets of plots
+all_plots <- c(plots_audio, plots_extra)
+
+# Combine plots into a grid (adjusting rows and columns as needed)
+grid_plot <- wrap_plots(all_plots, ncol = 3, nrow = 3) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    title = "",
+    theme = theme(
+      plot.title = element_text(size = 20, face = "bold", hjust = 0.5, margin = margin(b = 20)),
+      plot.background = element_rect(fill = "white", color = NA)
+    )
+  ) &
+  theme(plot.margin = margin(10, 10, 10, 10))
+
+# Save the plot
+ggsave(
+  filename = "audio_features_and_extras_comparison_grid2.png",
+  plot = grid_plot,
+  width = 24,
+  height = 20,
+  units = "in",
+  dpi = 300
+)
+
+# Display the plot (optional)
+#print(grid_plot)
+
+```
+
+
+
+```{r}
+xvcx
+cdscdcc
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
+
+
+```{r}
+# Install and load required packages
+if (!require(corrplot)) install.packages("corrplot")
+library(corrplot)
+
+# Define the topic names for subplots
+topics <- c("ADHD & Music", "Focus Music", "Stuck Songs")
+
+# Select relevant variables for correlation
+variables <- c("energy", "acousticness", "danceability", "valence", "loudness", 
+                    "instrumentalness", "tempo","speechiness","lexical_diversity", "lyrics_sentiment")
+
+# Create a single correlation matrix to determine variable order
+full_cor_matrix <- cor(finaldf[, variables], use = "complete.obs", method = "pearson")
+
+# Get the order of variables based on the full correlation matrix
+ordered_vars <- colnames(full_cor_matrix)[hclust(dist(1 - abs(full_cor_matrix)))$order]
+
+# Define color breaks for specific correlation ranges
+col_breaks <- c(-1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1)
+# Define corresponding colors for each range
+col_palette <- c("#FF0000", "#FF7F00", "#FFFF00", "#7FFF00", "#FFFFFF",  # Negative correlations
+                 "#FFFFFF",  # No correlation
+                 "#00FFFF", "#007FFF", "#0000FF", "#00007F")  # Positive correlations
+
+# Set up the plotting area for 3 subplots (1 row, 3 columns)
+png("correlation_plot_subplots_fixed.png", width = 1500, height = 500, res = 120)
+par(mfrow = c(1, 3))  # Arrange plots in 1 row and 3 columns
+
+# Loop over the topics to create a correlation plot for each topic
+for (topic_name in topics) {
+  topic_data <- finaldf[finaldf$topic_name == topic_name, ]
+  
+  # Check if the topic_data is empty
+  if (nrow(topic_data) == 0) {
+    warning(paste("No data found for topic:", topic_name))
+    next  # Skip to the next topic if no data is found
+  }
+  
+  # Calculate the correlation matrix for the current topic
+  cor_matrix <- cor(topic_data[, variables], use = "complete.obs", method = "pearson")
+  
+  # Ensure the correlation matrix has the same order as the full correlation matrix
+  cor_matrix <- cor_matrix[ordered_vars, ordered_vars]
+
+  # Create correlation plot for the current topic
+  corrplot(cor_matrix,
+           method = "color",            # Color for the plot
+           col = col_palette,           # Custom color palette
+           breaks = col_breaks,         # Define breaks for colors
+           type = "lower",              # Show only the lower triangle
+           order = "original",          # Use original order
+           addCoef.col = "black",       # Add correlation coefficients
+           number.cex = 0.7,            # Adjust coefficient text size
+           tl.col = "darkblue",         # Text color for variable names
+           tl.srt = 45,                 # Rotate text labels for readability
+           tl.cex = 0.9,                # Adjust text label size
+           cl.cex = 1,                  # Adjust the legend size
+           diag = FALSE,                # Hide diagonal (correlation with self)
+           title = topic_name,          # Add title with the topic name
+           mar = c(0, 0, 2, 0),         # Adjust margins
+           cl.pos = "b",                # Position color legend at the bottom
+           cl.lim = c(-1, 1),           # Set limits for the color scale
+           outline = TRUE               # Add border around the plot
+  )
+}
+
+dev.off()
+
+# Reset the plotting area back to 1 plot
+par(mfrow = c(1, 1))
+
+# Display the saved plot in RStudio (optional)
+if (interactive()) {
+  img <- png::readPNG("correlation_plot_subplots_fixed.png")
+  grid::grid.raster(img)
+}
+```
+
+
+```{r}
+# Install and load required packages
+if (!require(corrplot)) install.packages("corrplot")
+library(corrplot)
+finaldf$topic_name <- ifelse(finaldf$topic_name == "ADHD & Music", "General Purpose", finaldf$topic_name)
+
+
+# Define the topic names for subplots
+topics <- c("General Purpose", "Focus Music", "Stuck Songs")
+
+# Select relevant variables for correlation
+variables <- c("energy", "acousticness", "danceability", "valence", "loudness", 
+               "instrumentalness", "tempo", "speechiness", "lexical_diversity", "lyrics_sentiment")
+
+# Create a single correlation matrix to determine variable order
+full_cor_matrix <- cor(finaldf[, variables], use = "complete.obs", method = "pearson")
+
+# Get the order of variables based on the full correlation matrix
+ordered_vars <- colnames(full_cor_matrix)[hclust(dist(1 - abs(full_cor_matrix)))$order]
+
+# Define color breaks for specific correlation ranges
+col_breaks <- seq(-1, 1, length.out = 11)  # More gradual color transitions
+# Define corresponding colors for each range
+col_palette <- colorRampPalette(c("#FF0000", "#FFFFFF", "#0000FF"))(length(col_breaks) - 1)  # Gradient from red to blue
+
+# Set up the plotting area for 3 subplots (1 row, 3 columns)
+png("correlation_plot_subplots_fixed.png", width = 1800, height = 600, res = 120)
+par(mfrow = c(1, 3), mar = c(5, 5, 4, 2))  # Adjust margins for better spacing
+
+# Loop over the topics to create a correlation plot for each topic
+for (topic_name in topics) {
+  topic_data <- finaldf[finaldf$topic_name == topic_name, ]
+  
+  # Check if the topic_data is empty
+  if (nrow(topic_data) == 0) {
+    warning(paste("No data found for topic:", topic_name))
+    next  # Skip to the next topic if no data is found
+  }
+  
+  # Calculate the correlation matrix for the current topic
+  cor_matrix <- cor(topic_data[, variables], use = "complete.obs", method = "pearson")
+  
+  # Ensure the correlation matrix has the same order as the full correlation matrix
+  cor_matrix <- cor_matrix[ordered_vars, ordered_vars]
+
+  # Create correlation plot for the current topic
+  corrplot(cor_matrix,
+           method = "color",            # Color for the plot
+           col = col_palette,           # Custom color palette
+           breaks = col_breaks,         # Define breaks for colors
+           type = "lower",              # Show only the lower triangle
+           order = "original",          # Use original order
+           addCoef.col = "black",       # Add correlation coefficients
+           number.cex = 0.8,            # Adjust coefficient text size
+           tl.col = "black",            # Text color for variable names
+           tl.srt = 45,                 # Rotate text labels for readability
+           tl.cex = 1.0,                # Adjust text label size
+           cl.cex = 1,                  # Adjust the legend size
+           diag = FALSE,                # Hide diagonal (correlation with self)
+           title = topic_name,          # Add title with the topic name
+           cex.main = 1.5,              # Title size
+           mar = c(0, 0, 2, 0),         # Adjust margins
+           cl.pos = "b",                # Position color legend at the bottom
+           cl.lim = c(-1, 1),           # Set limits for the color scale
+           outline = TRUE                # Add border around the plot
+  )
+}
+
+dev.off()
+
+# Reset the plotting area back to 1 plot
+par(mfrow = c(1, 1))
+
+# Display the saved plot in RStudio (optional)
+if (interactive()) {
+  img <- png::readPNG("correlation_plot_subplots_fixed.png")
+  grid::grid.raster(img)
+}
+
+```
+
+
+```{r}
+# Step 1: Filter topics and select top 50 songs per topic based on score_comments
+filtered_data <- finaldf %>%
+  group_by(pred_label) %>%
+  slice_max(order_by = score_comments, n = 50, with_ties = FALSE) %>% 
+  ungroup()
+
+
+
+```
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(scales)
+library(ggrepel)
+
+# Calculate medians (or means) to split into quadrants
+median_sentiment <- 0
+median_popularity <- 50
+
+# Define custom colors for each pred_label
+# Replace these with your desired colors and make sure you have a color for each unique label
+custom_colors <- c(
+  "Focus Music" = "#E41A1C",  # Red
+  "Other" = "#377EB8",        # Blue
+  "Stuck Songs" = "#4DAF4A"   # Green
+)
+
+# Create the plot
+p <- ggplot(filtered_data, aes(x = lyrics_sentiment, y = popularity, color = pred_label)) +
+  geom_point(aes(size = score_comments), alpha = 0.7) +
+  geom_text_repel(aes(label = spotify_title), 
+                  size = 3, 
+                  max.overlaps = 5,
+                  box.padding = 0.5,
+                  segment.color = "grey50") +
+  geom_vline(xintercept = median_sentiment, linetype = "dashed", color = "grey50") +
+  geom_hline(yintercept = median_popularity, linetype = "dashed", color = "grey50") +
+  facet_wrap(~ pred_label, scales = "free_x") +
+  scale_color_manual(values = custom_colors) +  # Use custom colors
+  scale_size_continuous(range = c(1, 8), name = "Comment Score") +
+  scale_x_continuous(labels = scales::number_format(accuracy = 0.1)) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 1)) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 10),
+    legend.position = "right",
+    legend.box = "vertical",
+    strip.text = element_text(size = 12, face = "bold"),
+    panel.spacing = unit(2, "lines"),
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(20, 20, 20, 20)
+  ) +
+  labs(
+    title = "",
+    subtitle = "",
+    x = "Lyrics Sentiment",
+    y = "Popularity",
+    color = "Label"
+  )
+
+# Save the plot
+ggsave(
+  filename = "popsent_improved_custom_colors.png",
+  plot = p,
+  width = 18,
+  height = 10,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+
+print(p)
+
+```
+
+
+```{r}
+ggplot(finaldf, aes(x = instrumentalness, color = topic_name, fill = topic_name)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of Instrumentalness Across Topics",
+       x = "Instrumentalness",
+       y = "Density") +
+  xlim(0.1, 1.5) +  # Adjust the limits to zoom in
+  theme_minimal()
+
+```
+
+```{r}
+ggplot(finaldf, aes(x = instrumentalness, fill = topic_name)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of Instrumentalness Across Topics",
+       x = "Instrumentalness",
+       y = "Density") +
+  facet_wrap(~ topic_name, scales = "free_y") +  # Separate plot for each topic
+  theme_minimal()
+
+
+```
+
+```{r}
+ggplot(finaldf, aes(x = log1p(instrumentalness), color = topic_name, fill = topic_name)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of log-transformed Instrumentalness Across Topics",
+       x = "Log-transformed Instrumentalness",
+       y = "Density") +
+  theme_minimal()
+
+```
+```{r}
+# Load libraries
+library(ggplot2)
+library(GGally)
+
+# Subset your data to include only the three relevant topics
+df_subset <- finaldf[finaldf$topic_name %in% c("ADHD & Music", "Focus Music", "Stuck Songs"), ]
+
+# Select the columns for the pair plot
+selected_columns <- df_subset[, c("energy", "acousticness", "danceability", "valence", 
+                                "loudness", "instrumentalness", "tempo", "speechiness", 
+                                "lexical_diversity", "lyrics_sentiment", "topic_name")]
+
+# Custom color palette for topics
+my_colors <- c("ADHD & Music" = "#FF6B6B",  # Coral red
+               "Focus Music" = "#4ECB71",    # Bright green
+               "Stuck Songs" = "#4A90E2")    # Blue
+
+# Custom function for density plots
+my_density <- function(data, mapping, ...) {
+  x_var <- quo_name(mapping$x)
+  ggplot(data = data, mapping = mapping) +
+    geom_density(aes(x = .data[[x_var]], 
+                    color = topic_name,
+                    fill = topic_name),
+                alpha = 0.5) +
+    scale_color_manual(values = my_colors) +
+    scale_fill_manual(values = my_colors) +
+    theme_minimal()
+}
+
+# Custom function for correlation
+cor_fn <- function(data, mapping, ...) {
+  ggally_cor(data, mapping, size = 4, color = "black", digits = 2, ...) + 
+    theme(panel.background = element_rect(fill = "white"),
+          text = element_text(face = "bold"))
+}
+
+# Create the pair plot
+pair_plot <- ggpairs(selected_columns,
+                    mapping = aes(color = topic_name),
+                    columns = 1:10,
+                    legend = c(1, 1),
+                    upper = list(continuous = cor_fn),
+                    lower = list(continuous = wrap("smooth", alpha = 0.3, method = "lm")),
+                    diag = list(continuous = my_density)) +
+  
+  # Theme adjustments
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    panel.spacing = unit(1, "lines"),
+    panel.grid.major = element_line(color = "grey90", size = 0.5),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white", color = NA),
+    strip.text = element_text(face = "bold", size = 13),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text.y = element_text(hjust = 1)
+  ) +
+  
+  # Apply color scales to the overall plot
+  scale_color_manual(values = my_colors) +
+  scale_fill_manual(values = my_colors)
+
+# Save the plot
+ggsave("pair_plot.png", pair_plot, width = 20, height = 20, dpi = 300)
+
+# Display the plot
+print(pair_plot)
+```
+
+
+```{r}
+# Load libraries
+library(ggplot2)
+library(GGally)
+
+# Select the columns for the pair plot
+selected_columns <- finaldf[, c("energy", "acousticness", "danceability", "valence", 
+                                "loudness", "instrumentalness", "tempo", "speechiness", 
+                                "lexical_diversity", "lyrics_sentiment", "pred_label")]
+
+# Enhanced color palette with better contrast and visibility
+my_colors <- c("Focus Music" = "#00B386",      # Teal green
+               "Other" = "#FF5C5C",           # Brighter red
+               "Stuck Songs" = "#4169E1")      # Royal blue
+
+# Custom function for density plots with enhanced aesthetics
+my_density <- function(data, mapping, ...) {
+  x_var <- quo_name(mapping$x)
+  ggplot(data = data, mapping = mapping) +
+    geom_density(aes(x = .data[[x_var]], 
+                     color = pred_label,
+                     fill = pred_label),
+                 alpha = 0.4,                    # Reduced alpha for better overlap visibility
+                 linewidth = 0.8) +              # Thinner lines
+    scale_color_manual(values = my_colors) +
+    scale_fill_manual(values = my_colors) +
+    theme_minimal() +
+    theme(axis.text = element_text(size = 8),  # Smaller axis text
+          panel.grid = element_blank())         # Remove grid lines
+}
+
+# Custom function for correlation with enhanced formatting
+cor_fn <- function(data, mapping, ...) {
+  ggally_cor(data, mapping, 
+             size = 3.2,                        # Slightly smaller text
+             color = "black",
+             digits = 2,
+             stars = TRUE,                      # Show significance stars
+             family = "sans") +                 # Clean font
+    theme(panel.background = element_rect(fill = "white", color = NA),
+          text = element_text(face = "bold"))
+}
+
+# Custom function for scatter plots
+my_smooth <- function(data, mapping, ...) {
+  ggplot(data = data, mapping = mapping) +
+    geom_point(size = 0.8,                     # Smaller points
+               alpha = 0.4) +                   # More transparency
+    geom_smooth(method = "lm",
+                se = TRUE,                      # Add confidence intervals
+                alpha = 0.2,
+                linewidth = 0.8) +
+    theme_minimal()
+}
+
+# Create the enhanced pair plot
+pair_plot <- ggpairs(selected_columns,
+                     mapping = aes(color = pred_label),
+                     columns = 1:10,
+                     legend = c(1, 1),
+                     upper = list(continuous = cor_fn),
+                     lower = list(continuous = wrap(my_smooth)),
+                     diag = list(continuous = my_density)) +
+  
+  # Enhanced theme
+  theme_minimal(base_size = 10) +              # Smaller base font size
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    legend.key.size = unit(0.8, "lines"),      # Smaller legend keys
+    panel.spacing = unit(0.8, "lines"),        # Reduced panel spacing
+    panel.border = element_rect(color = "grey90", fill = NA),  # Light borders
+    panel.grid.major = element_line(color = "grey95", size = 0.2),  # Lighter grid
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold", 
+                              size = 9,          # Smaller variable names
+                              margin = margin(b = 2)), # Less bottom margin
+    axis.text = element_text(size = 8),
+    axis.text.x = element_text(angle = 45, 
+                               hjust = 1,
+                               margin = margin(t = 2)),
+    axis.text.y = element_text(margin = margin(r = 2))
+  ) +
+  
+  # Apply enhanced color scales
+  scale_color_manual(values = my_colors) +
+  scale_fill_manual(values = my_colors) +
+  # Custom guides for better legend appearance
+  guides(color = guide_legend(override.aes = list(alpha = 1, 
+                                                  size = 3,
+                                                  shape = 16))) # Filled circles in legend
+
+# Add more whitespace around the plot
+margin_plot <- pair_plot + 
+  theme(plot.margin = margin(t = 20, r = 20, b = 20, l = 20))
+
+# Save the plot with higher resolution
+ggsave("enhanced_pair_plot_pred_label.png", 
+       margin_plot, 
+       width = 16, 
+       height = 14, 
+       dpi = 300,
+       bg = "white")
+
+# Display the plot
+print(margin_plot)
+
+```
+
+
+```{r}
+# Filter rows where topic_name is "Stuck Songs"
+stuck <- finaldf[finaldf$topic_name == "Stuck Songs", ]
+```
+
+```{r}
+# Load required libraries
+library(stringr)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+
+# Function to create similarity matrix for a lyric
+create_similarity_matrix <- function(lyrics) {
+  words <- tolower(lyrics) %>% str_split("\\s+") %>% unlist()
+  n <- length(words)
+  matrix <- matrix(0, nrow = n, ncol = n)
+  
+  for (i in 1:n) {
+    for (j in 1:n) {
+      if (words[i] == words[j]) {
+        matrix[i, j] <- 1
+      }
+    }
+  }
+  return(matrix)
+}
+
+# Function to plot similarity matrix with title and subtitle
+plot_similarity_matrix <- function(matrix, song_name, artist_name, word_count, repetitiveness) {
+  df <- expand.grid(x = 1:nrow(matrix), y = 1:ncol(matrix))
+  df$value <- as.vector(matrix)
+  
+  ggplot(df, aes(x = x, y = y, fill = value)) +
+    geom_tile() +
+    scale_fill_gradient(low = "lightblue", high = "darkblue") +
+    scale_y_reverse() +  # Reverse the y-axis
+    theme_minimal(base_size = 8) +
+    theme(
+      legend.position = "none",
+      plot.title = element_text(size = 10, face = "bold"),
+      plot.subtitle = element_text(size = 8, color = "gray50")
+    ) +
+    labs(
+      title = paste(song_name, "by", artist_name),
+      subtitle = paste("Word Count:", word_count, "- Repetitiveness:", repetitiveness)
+    ) +
+    coord_fixed()
+}
+
+# Select the top 25 lyrics based on score_comments
+top_25_lyrics <- stuck %>% 
+  arrange(desc(score_comments)) %>% 
+  head(25)
+
+# Create a list of similarity plots for each lyric
+plots <- lapply(1:nrow(top_25_lyrics), function(i) {
+  matrix <- create_similarity_matrix(top_25_lyrics$lyrics[i])
+  plot_similarity_matrix(
+    matrix,
+    song_name = top_25_lyrics$songname1[i],
+    artist_name = top_25_lyrics$artistname1[i],
+    word_count = top_25_lyrics$word_count[i],
+    repetitiveness = top_25_lyrics$repetitiveness[i]
+  )
+})
+
+# Arrange the 25 plots in a 5x5 grid
+grid_plot <- grid.arrange(grobs = plots, ncol = 5, nrow = 5)
+
+# Save the plot to a file
+ggsave("top_25_song_similarity_plots.png", grid_plot, width = 15, height = 15, dpi = 300)
+
+```
+
+```{r}
+# Filter songs with word count between 100-150
+filtered_songs <- stuck %>%
+  filter(word_count >= 100 & word_count <= 150)
+
+# Print how many songs we're working with
+cat("Number of songs selected:", nrow(filtered_songs), "\n")
+
+# Create matrices for filtered songs
+matrices_list <- lapply(1:nrow(filtered_songs), function(i) {
+  create_similarity_matrix(filtered_songs$lyrics[i])
+})
+
+# Get minimum dimension to standardize all matrices
+min_dim <- min(sapply(matrices_list, nrow))
+
+# Resize all matrices to minimum dimension
+standardized_matrices <- lapply(matrices_list, function(mat) {
+  if(nrow(mat) > min_dim) {
+    return(mat[1:min_dim, 1:min_dim])
+  } else {
+    return(mat)
+  }
+})
+
+# Create overlapped matrix
+overlapped_matrix <- matrix(0, nrow = min_dim, ncol = min_dim)
+for(mat in standardized_matrices) {
+  overlapped_matrix <- overlapped_matrix + mat
+}
+
+# Normalize by number of matrices to get values between 0 and 1
+overlapped_matrix <- overlapped_matrix / length(standardized_matrices)
+
+# Create enhanced visualization
+plot_overlapped_matrix <- function(matrix, title = "Overlapped Similarity Matrix") {
+  df <- expand.grid(x = 1:nrow(matrix), y = 1:ncol(matrix))
+  df$value <- as.vector(matrix)
+  
+  max_overlap <- max(matrix)
+  
+  ggplot(df, aes(x = x, y = y, fill = value)) +
+    geom_tile() +
+    scale_fill_gradientn(
+      colors = c("#FFFFFF", "#E6F3FF", "#BDDEFF", "#93C4FF", "#6AA9FF", 
+                "#418FFF", "#1875FF", "#005CE6", "#0047B3", "#003380"),
+      name = "Overlap\nFrequency",
+      breaks = seq(0, max_overlap, length.out = 5),
+      labels = scales::percent
+    ) +
+    scale_y_reverse() +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 10, color = "gray50", hjust = 0.5),
+      panel.grid = element_blank(),
+      legend.position = "right",
+      legend.title = element_text(face = "bold"),
+      axis.title = element_text(size = 10, face = "bold"),
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20),
+      panel.background = element_rect(fill = "white", color = NA)
+    ) +
+    labs(
+      title = title,
+      subtitle = paste0(
+        "Based on ", length(standardized_matrices), 
+        " songs with word count 100-150\nMatrix size: ", 
+        nrow(matrix), "×", ncol(matrix)
+      ),
+      x = "Word Position in Lyrics",
+      y = "Word Position in Lyrics"
+    ) +
+    coord_fixed()
+}
+
+# Create and save the plot
+final_plot <- plot_overlapped_matrix(overlapped_matrix)
+ggsave("overlapped_similarity_matrix.png", 
+       final_plot, 
+       width = 12, 
+       height = 10, 
+       dpi = 300,
+       bg = "white")
+
+# Print summary statistics
+cat("\nOverlap Statistics:\n")
+cat("Minimum overlap:", min(overlapped_matrix), "\n")
+cat("Maximum overlap:", max(overlapped_matrix), "\n")
+cat("Mean overlap:", mean(overlapped_matrix), "\n")
+cat("Matrix dimension:", nrow(overlapped_matrix), "x", ncol(overlapped_matrix), "\n")
+```
+
+
+```{r}
+library(ggplot2)
+library(viridis)
+
+create_circular_network <- function(matrix, similarity_threshold = 0.90) {
+  # Convert matrix to long format
+  df <- reshape2::melt(matrix)
+  names(df) <- c("pos1", "pos2", "similarity")
+  
+  # Create circular layout
+  n <- nrow(matrix)
+  angles <- seq(0, 2*pi, length.out = n+1)[1:n]
+  
+  # Create node positions
+  nodes <- data.frame(
+    x = cos(angles),
+    y = sin(angles),
+    pos = 1:n,
+    angle = angles * (180/pi)  # Convert to degrees for text
+  )
+  
+  # Create edges for high similarity pairs
+  high_sim_pairs <- df[df$similarity > quantile(df$similarity, similarity_threshold), ]
+  edges <- data.frame(
+    x = cos(angles[high_sim_pairs$pos1]),
+    y = sin(angles[high_sim_pairs$pos1]),
+    xend = cos(angles[high_sim_pairs$pos2]),
+    yend = sin(angles[high_sim_pairs$pos2]),
+    similarity = high_sim_pairs$similarity,
+    connection_type = ifelse(
+      abs(high_sim_pairs$pos1 - high_sim_pairs$pos2) <= 5,
+      "Local Pattern",
+      "Long-range Pattern"
+    )
+  )
+  
+  # Calculate some statistics for annotation
+  stats <- list(
+    total_connections = nrow(edges),
+    local_patterns = sum(edges$connection_type == "Local Pattern"),
+    long_patterns = sum(edges$connection_type == "Long-range Pattern"),
+    max_similarity = max(edges$similarity)
+  )
+  
+  # Create the plot
+  p <- ggplot() +
+    # Add edges with different colors for local vs long-range patterns
+    geom_segment(
+      data = edges,
+      aes(
+        x = x, y = y,
+        xend = xend, yend = yend,
+        alpha = similarity,
+        color = connection_type,
+        size = similarity
+      )
+    ) +
+    # Add nodes
+    geom_point(
+      data = nodes,
+      aes(x = x, y = y),
+      color = "#2D3047",
+      size = 3
+    ) +
+    # Add position labels
+    geom_text(
+      data = nodes[seq(1, n, by = 5), ],  # Label every 5th position
+      aes(
+        x = x * 1.15,  # Slightly outside the circle
+        y = y * 1.15,
+        label = pos
+      ),
+      size = 3,
+      family = "Arial"
+    ) +
+    # Customize colors and aesthetics
+    scale_color_manual(
+      values = c(
+        "Local Pattern" = "#419D78",
+        "Long-range Pattern" = "#E0A458"
+      )
+    ) +
+    scale_size_continuous(range = c(0.2, 1)) +
+    scale_alpha_continuous(range = c(0.2, 0.8)) +
+    # Add informative title and subtitle
+    labs(
+      title = "Word Pattern Network in Song Structure",
+      subtitle = sprintf(
+        "Showing high-similarity connections (top %.0f%%). %d total connections (%d local, %d long-range)",
+        (1 - similarity_threshold) * 100,
+        stats$total_connections,
+        stats$local_patterns,
+        stats$long_patterns
+      ),
+      color = "Connection Type",
+      alpha = "Similarity Score",
+      size = "Similarity Score"
+    ) +
+    # Add explanatory captions
+    labs(caption = paste(
+      "• Nodes represent word positions in the song",
+      "• Edges connect positions with similar word patterns",
+      "• Local patterns (green) show nearby repetitions",
+      "• Long-range patterns (orange) show distant echoes",
+      "• Thickness and opacity indicate similarity strength",
+      sep = "\n"
+    )) +
+    # Customize theme
+    theme_void() +
+    theme(
+      plot.title = element_text(
+        family = "Arial",
+        size = 16,
+        face = "bold",
+        hjust = 0.5,
+        margin = margin(b = 20)
+      ),
+      plot.subtitle = element_text(
+        family = "Arial",
+        size = 12,
+        color = "grey40",
+        hjust = 0.5,
+        margin = margin(b = 15)
+      ),
+      plot.caption = element_text(
+        family = "Arial",
+        size = 10,
+        color = "grey40",
+        hjust = 0,
+        margin = margin(t = 20)
+      ),
+      legend.position = "right",
+      legend.title = element_text(
+        family = "Arial",
+        size = 11,
+        face = "bold"
+      ),
+      legend.text = element_text(
+        family = "Arial",
+        size = 10
+      ),
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20)
+    ) +
+    coord_fixed()
+  
+  # Save the plot
+  ggsave(
+    "circular_similarity_network.png",
+    p,
+    width = 12,
+    height = 10,
+    dpi = 300,
+    bg = "white"
+  )
+  
+  return(list(plot = p, statistics = stats))
+}
+```
+
+
+```{r}
+result <- create_circular_network(overlapped_matrix)
+```
+
+
+```{r}
+result_with_more_connections <- create_circular_network(overlapped_matrix, similarity_threshold = 0.80)
+```
+
+```{r}
+result_with_fewer_connections <- create_circular_network(overlapped_matrix, similarity_threshold = 0.95)
+```
+
+
+```{r}
+# Filter songs with word count between 100-150
+filtered_songs <- stuck %>%
+  filter(word_count >= 100 & word_count <= 150)
+
+# Print how many songs we're working with
+cat("Number of songs selected:", nrow(filtered_songs), "\n")
+
+# Create matrices for filtered songs
+matrices_list <- lapply(1:nrow(filtered_songs), function(i) {
+  create_similarity_matrix(filtered_songs$lyrics[i])
+})
+
+# Get minimum dimension to standardize all matrices
+min_dim <- min(sapply(matrices_list, nrow))
+
+# Resize all matrices to minimum dimension
+standardized_matrices <- lapply(matrices_list, function(mat) {
+  if(nrow(mat) > min_dim) {
+    return(mat[1:min_dim, 1:min_dim])
+  } else {
+    return(mat)
+  }
+})
+
+# Create overlapped matrix without normalization
+overlapped_matrix <- matrix(0, nrow = min_dim, ncol = min_dim)
+for(mat in standardized_matrices) {
+  overlapped_matrix <- overlapped_matrix + mat
+}
+
+# Create enhanced visualization without normalization
+plot_overlapped_matrix <- function(matrix, title = "Overlapped Similarity Matrix") {
+  df <- expand.grid(x = 1:nrow(matrix), y = 1:ncol(matrix))
+  df$value <- as.vector(matrix)
+  
+  max_overlap <- max(matrix)
+  
+  ggplot(df, aes(x = x, y = y, fill = value)) +
+    geom_tile() +
+    scale_fill_gradientn(
+      colors = c("#FFFFFF", "red", "yellow", "#93C4FF", "#6AA9FF", 
+                "#418FFF", "#1875FF", "#005CE6", "#0047B3", "#003380"),
+      name = "Overlap\nCount",
+      breaks = seq(0, max_overlap, length.out = 5)
+    ) +
+    scale_y_reverse() +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 10, color = "gray50", hjust = 0.5),
+      panel.grid = element_blank(),
+      legend.position = "right",
+      legend.title = element_text(face = "bold"),
+      axis.title = element_text(size = 10, face = "bold"),
+      plot.margin = margin(t = 20, r = 20, b = 20, l = 20),
+      panel.background = element_rect(fill = "white", color = NA)
+    ) +
+    labs(
+      title = title,
+      subtitle = paste0(
+        "Based on ", length(standardized_matrices), 
+        " songs with word count 100-150\nMatrix size: ", 
+        nrow(matrix), "×", ncol(matrix)
+      ),
+      x = "Word Position in Lyrics",
+      y = "Word Position in Lyrics"
+    ) +
+    coord_fixed()
+}
+
+# Create and save the plot
+final_plot <- plot_overlapped_matrix(overlapped_matrix)
+ggsave("overlapped_similarity_matrix.png", 
+       final_plot, 
+       width = 12, 
+       height = 10, 
+       dpi = 300,
+       bg = "white")
+
+# Print summary statistics
+cat("\nOverlap Statistics:\n")
+cat("Minimum overlap:", min(overlapped_matrix), "\n")
+cat("Maximum overlap:", max(overlapped_matrix), "\n")
+cat("Mean overlap:", mean(overlapped_matrix), "\n")
+cat("Matrix dimension:", nrow(overlapped_matrix), "x", ncol(overlapped_matrix), "\n")
+
+```
+
+
+
+
+```{r}
+# First make sure you have your overlapped_matrix data
+# Then call the function:
+result <- create_circular_network(overlapped_matrix)
+
+# To display the plot directly in R:
+print(result$plot)
+
+# The plot is also automatically saved as "circular_similarity_network.png" in your working directory
+
+# To see the statistics:
+print(result$statistics)
+
+# If you want to adjust the threshold to see more or fewer connections:
+result_with_more_connections <- create_circular_network(overlapped_matrix, similarity_threshold = 0.80)  # Shows top 20% of connections
+# or
+result_with_fewer_connections <- create_circular_network(overlapped_matrix, similarity_threshold = 0.95)  # Shows top 5% of connections
+```
+
+
+
+
+
+```{r}
+# Load required libraries
+library(stringr)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+
+# Function to create similarity matrix for a lyric
+create_similarity_matrix <- function(lyrics) {
+  words <- tolower(lyrics) %>% str_split("\\s+") %>% unlist()
+  n <- length(words)
+  matrix <- matrix(0, nrow = n, ncol = n)
+  
+  for (i in 1:n) {
+    for (j in 1:n) {
+      if (words[i] == words[j]) {
+        matrix[i, j] <- 1
+      }
+    }
+  }
+  return(matrix)
+}
+
+# Function to plot similarity matrix with title, subtitle, and circles around repeated verses
+plot_similarity_matrix <- function(matrix, song_name, artist_name, word_count, repetitiveness) {
+  df <- expand.grid(x = 1:nrow(matrix), y = 1:ncol(matrix))
+  df$value <- as.vector(matrix)
+  
+  # Add circles for repeated verses
+  repeated_df <- subset(df, value == 1)
+  
+  ggplot(df, aes(x = x, y = y, fill = value)) +
+    geom_tile() +
+    scale_fill_gradient(low = "lightblue", high = "darkblue") +
+    geom_point(data = repeated_df, aes(x = x, y = y), shape = 1, color = "red", size = 1.5, alpha = 0.5) +
+    scale_y_reverse() +  # Reverse the y-axis
+    theme_minimal(base_size = 8) +
+    theme(
+      legend.position = "none",
+      plot.title = element_text(size = 10, face = "bold"),
+      plot.subtitle = element_text(size = 8, color = "gray50")
+    ) +
+    labs(
+      title = paste(song_name, "by", artist_name),
+      subtitle = paste("Word Count:", word_count, "- Repetitiveness:", round(repetitiveness, 2))
+    ) +
+    coord_fixed()
+}
+
+# Select the top 25 lyrics based on score_comments
+top_25_lyrics <- stuck %>% 
+  arrange(desc(score_comments)) %>% 
+  head(25)
+
+# Create a list of similarity plots for each lyric
+plots <- lapply(1:nrow(top_25_lyrics), function(i) {
+  matrix <- create_similarity_matrix(top_25_lyrics$lyrics[i])
+  plot_similarity_matrix(
+    matrix,
+    song_name = top_25_lyrics$songname1[i],
+    artist_name = top_25_lyrics$artistname1[i],
+    word_count = top_25_lyrics$word_count[i],
+    repetitiveness = top_25_lyrics$repetitiveness[i]
+  )
+})
+
+# Arrange the 25 plots in a 5x5 grid
+grid_plot <- grid.arrange(grobs = plots, ncol = 5, nrow = 5)
+
+# Save the plot to a file
+ggsave("top_25_song_similarity_plots2.png", grid_plot, width = 15, height = 15, dpi = 300)
+
+```
+```{r}
+
+```
+
+
+```{r}
+
+```
+
